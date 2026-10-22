@@ -148,6 +148,13 @@ status_t Camera2ClientBase<TClientBase>::initializeImpl(TProviderPtr providerPtr
         return NO_INIT;
     }
 
+#ifdef CAMERA_PACKAGE_NAME
+    // Each device names its own client; the process-wide current package is overwritten by
+    // every later connect attempt, even one that gets rejected.
+    static_cast<Camera3Device*>(mDevice.get())->setClientPackageName(
+            TClientBase::getPackageName());
+#endif
+
     // Notify camera opening (check op if check_full_attribution_source_chain flag is off).
     res = TClientBase::notifyCameraOpening();
     if (res != OK) {
