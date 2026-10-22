@@ -430,6 +430,11 @@ class Camera3Device :
      */
     status_t injectSessionParams(const CameraMetadata& sessionParams);
 
+    // Package of the client that owns this device, for CAMERA_PACKAGE_NAME.
+    void setClientPackageName(const std::string& packageName) {
+        mClientPackageName = packageName;
+    }
+
   protected:
     status_t disconnectImpl();
     static status_t removeFwkOnlyKeys(CameraMetadata *request);
@@ -1539,6 +1544,8 @@ class Camera3Device :
     void collectRequestStats(int64_t frameNumber, const CameraMetadata& request);
 
     metadata_vendor_id_t mVendorTagId;
+
+    std::string mClientPackageName;
 
     // Cached last requested template id
     int mLastTemplateId;

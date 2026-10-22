@@ -2589,24 +2589,24 @@ status_t Camera3Device::configureStreamsLocked(int operatingMode,
     }
 
 #ifdef CAMERA_PACKAGE_NAME
-    sp<VendorTagDescriptor> vTags;
-    sp<VendorTagDescriptorCache> vCache = VendorTagDescriptorCache::getGlobalVendorTagCache();
-    if (vCache.get()) {
-        const camera_metadata_t *metaBuffer = sessionParams.getAndLock();
-        metadata_vendor_id_t vendorId = get_camera_metadata_vendor_id(metaBuffer);
-        sessionParams.unlock(metaBuffer);
-        vCache->getVendorTagDescriptor(vendorId, &vTags);
+    // The HAL picks per-app behaviour from this session tag and keeps the previous app's
+    // state when the tag is missing, so send it on every configuration. Only the HAL's copy
+    // gets it: the HAL lists the tag as a session key, so if sessionParams itself carried it
+    // the request thread would see requests "remove" it and reconfigure forever.
+    CameraMetadata halSessionParams(sessionParams);
+    {
+        sp<VendorTagDescriptor> vTags;
+        sp<VendorTagDescriptorCache> vCache = VendorTagDescriptorCache::getGlobalVendorTagCache();
         uint32_t tag;
-        if (CameraMetadata::getTagFromName(CAMERA_PACKAGE_NAME, vTags.get(), &tag)) {
+        if (vCache == nullptr || vCache->getVendorTagDescriptor(mVendorTagId, &vTags) != OK ||
+                CameraMetadata::getTagFromName(CAMERA_PACKAGE_NAME, vTags.get(), &tag) != OK) {
             ALOGE("%s: Unable to get %s tag", __FUNCTION__, CAMERA_PACKAGE_NAME);
-        } else {
-            std::string pkgName = CameraService::getCurrPackageName();
-            status_t res = const_cast<CameraMetadata&>(sessionParams).update(tag, String8(pkgName.c_str()));
-            if (res) {
-                ALOGE("%s: metadata update failed, res = %d", __FUNCTION__, res);
-            }
+        } else if (halSessionParams.update(tag, String8(mClientPackageName.c_str())) != OK) {
+            ALOGE("%s: Unable to set %s", __FUNCTION__, CAMERA_PACKAGE_NAME);
         }
     }
+#else
+    const CameraMetadata& halSessionParams = sessionParams;
 #endif
 
     bool isConstrainedHighSpeed =
@@ -2760,9 +2760,9 @@ status_t Camera3Device::configureStreamsLocked(int operatingMode,
     // is not enabled but the HAL supports session specific hal buffer manager).
 
     int64_t logId = mCameraServiceProxyWrapper->getCurrentLogIdForCamera(mId);
-    const camera_metadata_t *sessionBuffer = sessionParams.getAndLock();
+    const camera_metadata_t *sessionBuffer = halSessionParams.getAndLock();
     res = mInterface->configureStreams(sessionBuffer, &config, bufferSizes, logId);
-    sessionParams.unlock(sessionBuffer);
+    halSessionParams.unlock(sessionBuffer);
 
     if (res == BAD_VALUE) {
         // HAL rejected this set of streams as unsupported, clean up config

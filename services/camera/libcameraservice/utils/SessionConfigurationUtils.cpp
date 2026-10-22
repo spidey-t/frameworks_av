@@ -600,6 +600,15 @@ binder::Status createConfiguredSurface(
                 __FUNCTION__, logicalCameraId.c_str(), format);
         format = HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED;
     }
+    // Test switch: video calls (e.g. WhatsApp) add a small YUV+JFIF stream that the Xiaomi
+    // HAL treats as a ZSL snapshot. Off by default; persist.vendor.cam.3pjfif=true remaps it.
+    if (!isPriviledgedClient && format == HAL_PIXEL_FORMAT_YCbCr_420_888 &&
+            dataSpace == HAL_DATASPACE_V0_JFIF && width <= 1920 && height <= 1080 &&
+            property_get_bool("persist.vendor.cam.3pjfif", false)) {
+        ALOGI("%s: Camera %s: third-party %dx%d YUV stream, JFIF -> UNKNOWN",
+                __FUNCTION__, logicalCameraId.c_str(), width, height);
+        dataSpace = HAL_DATASPACE_UNKNOWN;
+    }
     std::unordered_set<int32_t> overriddenSensorPixelModes;
     if (checkAndOverrideSensorPixelModesUsed(sensorPixelModesUsed, format, width, height,
             physicalCameraMetadata, &overriddenSensorPixelModes) != OK) {
